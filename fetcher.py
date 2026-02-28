@@ -12,11 +12,15 @@ from typing import List, Dict, Any
 # 添加项目路径
 sys.path.insert(0, '/Users/yuchao/.openclaw/workspace/market_monitor')
 
+from config.logger import setup_logger
 from models.symbol import Symbol
 from models.market_data import MarketDataRepository
 from api_clients import APIClientFactory
 from volatility_detector import VolatilityDetector, AlertResult
 from notifier import AlertNotifier
+
+# 设置日志
+logger = setup_logger('fetcher')
 
 class MarketDataFetcher:
     """行情数据获取器"""
@@ -35,9 +39,9 @@ class MarketDataFetcher:
     
     def fetch_symbol(self, symbol: Symbol) -> bool:
         """获取单个标的的行情并检测波动"""
+        logger.info(f"Fetching {symbol.symbol_code} ({symbol.symbol_name}) from {symbol.data_source}...")
+        
         try:
-            print(f"Fetching {symbol.symbol_code} ({symbol.symbol_name}) from {symbol.data_source}...")
-            
             # 获取对应 API 客户端
             client = APIClientFactory.get_client(symbol.data_source)
             
@@ -53,68 +57,65 @@ class MarketDataFetcher:
                 source_api=data['source_api']
             )
             
-            print(f"  ✓ Saved: price={data['price']}, time={data['market_time']}")
+            logger.info(f"  ✓ Saved: price={data['price']}, time={data['market_time']}")
             
             # 检测波动
             alert = self.detector.check_symbol(symbol, data['price'])
             if alert:
                 self.alerts.append(alert)
-                print(f"  ⚠ Alert triggered!")
+                logger.warning(f"  ⚠ Alert triggered for {symbol.symbol_code}!")
             
             self.stats['success'] += 1
             return True
             
         except Exception as e:
             error_msg = f"{symbol.symbol_code}: {str(e)}"
-            print(f"  ✗ Error: {error_msg}")
+            logger.error(f"  ✗ Error: {error_msg}")
+            logger.error(traceback.format_exc())
             self.stats['errors'].append(error_msg)
             self.stats['failed'] += 1
             return False
     
     def fetch_all(self) -> Dict[str, Any]:
         """获取所有活跃标的的行情"""
-        print(f"\n{'='*60}")
-        print(f"Market Data Fetcher - {datetime.now()}")
-        print(f"{'='*60}\n")
+        logger.info(f"{'='*60}")
+        logger.info(f"Market Data Fetcher - {datetime.now()}")
+        logger.info(f"{'='*60}")
         
         # 获取所有活跃标的
         symbols = self.repo.get_active_symbols()
         self.stats['total'] = len(symbols)
         
-        print(f"Found {len(symbols)} active symbols:\n")
+        logger.info(f"Found {len(symbols)} active symbols")
         
         # 逐个获取
         for symbol in symbols:
             self.fetch_symbol(symbol)
-            print()
         
-        # 打印统计
-        print(f"{'='*60}")
-        print(f"Summary: {self.stats['success']}/{self.stats['total']} succeeded")
+        # 统计
+        logger.info(f"Summary: {self.stats['success']}/{self.stats['total']} succeeded")
         if self.stats['failed'] > 0:
-            print(f"Failed: {self.stats['failed']}")
+            logger.warning(f"Failed: {self.stats['failed']}")
             for error in self.stats['errors']:
-                print(f"  - {error}")
-        print(f"{'='*60}\n")
+                logger.warning(f"  - {error}")
         
         # 发送预警
         if self.alerts:
             self.notifier.send(self.alerts)
-            # 返回预警消息供外部使用
             return {
                 **self.stats,
                 'alerts': self.alerts,
                 'alert_message': self.notifier.get_message(self.alerts)
             }
         else:
-            print("No alerts triggered.\n")
+            logger.info("No alerts triggered")
             return self.stats
     
     def fetch_single(self, symbol_code: str) -> bool:
         """获取单个标的的行情（用于测试）"""
         symbol = self.repo.get_symbol_by_code(symbol_code)
         if not symbol:
-            print(f"Symbol {symbol_code} not found")
+            logger.error(f"Symbol {symbol_code} not found")
             return False
         return self.fetch_symbol(symbol)
 
