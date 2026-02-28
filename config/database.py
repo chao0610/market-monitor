@@ -7,10 +7,10 @@ DB_PATH = Path(__file__).parent.parent / "data" / "market_monitor.db"
 def init_db():
     """初始化数据库，创建表结构"""
     DB_PATH.parent.mkdir(exist_ok=True)
-    
+
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     # 标的表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS symbols (
@@ -19,13 +19,15 @@ def init_db():
             symbol_name TEXT NOT NULL,
             symbol_type TEXT NOT NULL,
             data_source TEXT NOT NULL,
-            update_interval INTEGER DEFAULT 10,
+            update_interval INTEGER DEFAULT 5,
             latency_notes TEXT,
             is_active INTEGER DEFAULT 1,
+            alert_threshold REAL DEFAULT 1.0,
+            backfill_enabled INTEGER DEFAULT 0,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     # 行情表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS market_data (
@@ -39,7 +41,7 @@ def init_db():
             FOREIGN KEY (symbol_id) REFERENCES symbols(symbol_id)
         )
     ''')
-    
+
     # API配置表
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS api_configs (
@@ -51,10 +53,10 @@ def init_db():
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
     # 创建索引
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_market_data_symbol_time ON market_data(symbol_id, market_time)')
-    
+
     conn.commit()
     conn.close()
     print(f"Database initialized at {DB_PATH}")
@@ -66,7 +68,7 @@ def init_default_data():
     """初始化默认标的和API配置"""
     conn = get_connection()
     cursor = conn.cursor()
-    
+
     # 初始化API配置
     apis = [
         ('finnhub', 'https://finnhub.io/api/v1', 60, None),
@@ -77,32 +79,32 @@ def init_default_data():
         INSERT OR IGNORE INTO api_configs (api_name, base_url, rate_limit, api_key)
         VALUES (?, ?, ?, ?)
     ''', apis)
-    
+
     # 初始化标的
     symbols = [
-        # 加密货币 - Binance
-        ('BTCUSDT', 'Bitcoin', 'crypto', 'binance', 10, '实时'),
-        ('ETHUSDT', 'Ethereum', 'crypto', 'binance', 10, '实时'),
-        
-        # 贵金属 - Metals-API
-        ('XAU', 'Gold', 'commodity', 'metals-api', 10, '10分钟延迟'),
-        ('XAG', 'Silver', 'commodity', 'metals-api', 10, '10分钟延迟'),
-        
-        # 原油 - 通过Finnhub的USO ETF
-        ('USO', 'Crude Oil ETF', 'commodity', 'finnhub', 10, '实时(ETF)'),
-        
-        # 美股指数 - Finnhub
-        ('^GSPC', 'S&P 500', 'index', 'finnhub', 10, '实时'),
-        ('^DJI', 'Dow Jones', 'index', 'finnhub', 10, '实时'),
-        ('^IXIC', 'NASDAQ', 'index', 'finnhub', 10, '实时'),
+        # 加密货币 - Binance, 启用 backfill
+        ('BTCUSDT', 'Bitcoin', 'crypto', 'binance', 5, '实时', 2.0, 1),
+        ('ETHUSDT', 'Ethereum', 'crypto', 'binance', 5, '实时', 2.0, 1),
+
+        # 贵金属 ETF - Finnhub
+        ('GLD', 'Gold ETF', 'commodity', 'finnhub', 5, '实时', 1.0, 0),
+        ('SLV', 'Silver ETF', 'commodity', 'finnhub', 5, '实时', 1.0, 0),
+
+        # 原油 ETF - Finnhub
+        ('USO', 'Crude Oil ETF', 'commodity', 'finnhub', 5, '实时', 1.2, 0),
+
+        # 美股指数 ETF - Finnhub
+        ('SPY', 'S&P 500 ETF', 'index', 'finnhub', 5, '实时', 0.8, 0),
+        ('DIA', 'Dow Jones ETF', 'index', 'finnhub', 5, '实时', 0.8, 0),
+        ('QQQ', 'NASDAQ ETF', 'index', 'finnhub', 5, '实时', 0.8, 0),
     ]
-    
+
     cursor.executemany('''
-        INSERT OR IGNORE INTO symbols 
-        (symbol_code, symbol_name, symbol_type, data_source, update_interval, latency_notes)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT OR IGNORE INTO symbols
+        (symbol_code, symbol_name, symbol_type, data_source, update_interval, latency_notes, alert_threshold, backfill_enabled)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', symbols)
-    
+
     conn.commit()
     conn.close()
     print("Default data initialized")

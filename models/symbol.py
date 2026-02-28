@@ -13,6 +13,7 @@ class Symbol:
     latency_notes: str
     is_active: bool
     alert_threshold: float = 1.0
+    backfill_enabled: bool = False
 
 @dataclass
 class MarketData:

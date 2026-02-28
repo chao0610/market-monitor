@@ -14,7 +14,7 @@ class MarketDataRepository:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT symbol_id, symbol_code, symbol_name, symbol_type, 
-                   data_source, update_interval, latency_notes, is_active, alert_threshold
+                   data_source, update_interval, latency_notes, is_active, alert_threshold, backfill_enabled
             FROM symbols WHERE is_active = 1
         ''')
         rows = cursor.fetchall()
@@ -30,7 +30,8 @@ class MarketDataRepository:
                 update_interval=row[5],
                 latency_notes=row[6],
                 is_active=bool(row[7]),
-                alert_threshold=row[8] if row[8] is not None else 1.0
+                alert_threshold=row[8] if row[8] is not None else 1.0,
+                backfill_enabled=bool(row[9]) if row[9] is not None else False
             )
             for row in rows
         ]
@@ -42,7 +43,7 @@ class MarketDataRepository:
         cursor = conn.cursor()
         cursor.execute('''
             SELECT symbol_id, symbol_code, symbol_name, symbol_type, 
-                   data_source, update_interval, latency_notes, is_active, alert_threshold
+                   data_source, update_interval, latency_notes, is_active, alert_threshold, backfill_enabled
             FROM symbols WHERE symbol_code = ?
         ''', (symbol_code,))
         row = cursor.fetchone()
@@ -58,7 +59,8 @@ class MarketDataRepository:
                 update_interval=row[5],
                 latency_notes=row[6],
                 is_active=bool(row[7]),
-                alert_threshold=row[8] if row[8] is not None else 1.0
+                alert_threshold=row[8] if row[8] is not None else 1.0,
+                backfill_enabled=bool(row[9]) if row[9] is not None else False
             )
         return None
     

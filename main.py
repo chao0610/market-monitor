@@ -15,6 +15,7 @@ sys.path.insert(0, '/Users/yuchao/.openclaw/workspace/market_monitor')
 from config.database import init_db, init_default_data
 from config.logger import setup_logger
 from fetcher import MarketDataFetcher
+from backfill import BackfillService
 
 # 设置日志
 logger = setup_logger('market_monitor', 'market_monitor.log')
@@ -65,6 +66,13 @@ def main():
         init_db()
         init_default_data()
         logger.info("Database initialized")
+        
+        # 启动时补充历史数据
+        logger.info("Starting backfill service...")
+        backfill = BackfillService()
+        backfill_results = backfill.backfill_all()
+        if backfill_results:
+            logger.info(f"Backfill completed: {backfill_results}")
         
         # 立即执行一次
         job()
